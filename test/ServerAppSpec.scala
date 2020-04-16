@@ -35,9 +35,27 @@ class ServerAppSpec extends AnyWordSpec with Matchers {
 
 
   "isSomeoneInLineOfFire" must {
-    "be true for a player right in front of me" in {
+    "be true for a player below of me" in {
       val me = PlayerState(0, 0, S, false, 0)
       val other = PlayerState(0, 1, S, false, 0)
+
+      ServerApp.isSomeoneInLineOfFire(me, Iterable(me, other)) must be (true)
+    }
+    "be true for a player to the right of me" in {
+      val me = PlayerState(0, 0, E, false, 0)
+      val other = PlayerState(1, 0, E, false, 0)
+
+      ServerApp.isSomeoneInLineOfFire(me, Iterable(me, other)) must be (true)
+    }
+    "be true for a player above of me" in {
+      val me = PlayerState(0, 1, N, false, 0)
+      val other = PlayerState(0, 0, N, false, 0)
+
+      ServerApp.isSomeoneInLineOfFire(me, Iterable(me, other)) must be (true)
+    }
+    "be true for a player to the left of me" in {
+      val me = PlayerState(1, 0, W, false, 0)
+      val other = PlayerState(0, 0, W, false, 0)
 
       ServerApp.isSomeoneInLineOfFire(me, Iterable(me, other)) must be (true)
     }
