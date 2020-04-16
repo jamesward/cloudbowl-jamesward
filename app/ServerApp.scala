@@ -148,6 +148,12 @@ object ServerApp {
           else if (isSomeoneInLineOfFire(forward(me), all)) {
             "F"
           }
+          else if (isSomeoneInLineOfFire(turn(forward(me), L), all)) {
+            "F"
+          }
+          else if (isSomeoneInLineOfFire(turn(forward(me), R), all)) {
+            "F"
+          }
           else if (isSomeoneInLineOfFire(forward(turn(me, L)), all)) {
             "L"
           }
