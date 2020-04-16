@@ -64,6 +64,11 @@ class ServerAppSpec extends AnyWordSpec with Matchers {
 
       ServerApp.isSomeoneInLineOfFire(me, Iterable(me)) must be (false)
     }
+    "be false when facing a left or top wall" in {
+      val me = PlayerState(0, 0, W, false, 0)
+
+      ServerApp.isSomeoneInLineOfFire(me, Iterable(me)) must be (false)
+    }
     "be false for an out of range player" in {
       val me = PlayerState(0, 0, S, false, 0)
       val other = PlayerState(0, 4, S, false, 0)

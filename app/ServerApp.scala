@@ -81,19 +81,20 @@ object ServerApp {
 
   def isSomeoneInLineOfFire(me: PlayerState, all: Iterable[PlayerState]): Boolean = {
     val dist = 3
-    def floor(i: Int): Int = {
-      if (i < 0) 0 else i
+
+    def range(a: Int, b: Int): Range = {
+      Range.inclusive(Math.min(a, b), Math.max(a, b))
     }
 
     val (hittableX, hittableY) = me.direction match {
       case N =>
-        (Range.inclusive(me.x, me.x), Range.inclusive(floor(me.y - 1), floor(me.y - dist)))
+        (range(me.x, me.x), range(me.y - 1, me.y - dist))
       case E =>
-        (Range.inclusive(me.x + 1, me.x + dist), Range.inclusive(me.y, me.y))
+        (range(me.x + 1, me.x + dist), range(me.y, me.y))
       case S =>
-        (Range.inclusive(me.x, me.x), Range.inclusive(me.y + 1, me.y + dist))
+        (range(me.x, me.x), range(me.y + 1, me.y + dist))
       case W =>
-        (Range.inclusive(floor(me.x - 1), floor(me.x - dist)), Range.inclusive(me.y, me.y))
+        (range(me.x - 1, me.x - dist), range(me.y, me.y))
     }
 
     all.exists { playerState =>
