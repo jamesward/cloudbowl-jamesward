@@ -4,7 +4,7 @@ name := "cloudbowl-jamesward"
 
 scalaSource in Compile := baseDirectory.value / "app"
 
-resourceDirectory in Compile := baseDirectory.value / "app"
+resourceDirectory in Compile := baseDirectory.value / "conf"
 
 scalaSource in Test := baseDirectory.value / "test"
 
@@ -12,17 +12,31 @@ scalaVersion := "2.13.1"
 
 resolvers += Resolver.mavenLocal
 
-libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.1",
-  "org.slf4j" % "slf4j-simple" % "1.7.21",
+val Http4sVersion = "0.21.3"
+val CirceVersion = "0.13.0"
+val Specs2Version = "4.9.3"
+val LogbackVersion = "1.2.3"
 
-  "org.scalatest" %% "scalatest" % "3.1.1" % "test"
+libraryDependencies ++= Seq(
+  "org.http4s"      %% "http4s-blaze-server" % Http4sVersion,
+  "org.http4s"      %% "http4s-blaze-client" % Http4sVersion,
+  "org.http4s"      %% "http4s-circe"        % Http4sVersion,
+  "org.http4s"      %% "http4s-dsl"          % Http4sVersion,
+  "io.circe"        %% "circe-generic"       % CirceVersion,
+  "ch.qos.logback"  %  "logback-classic"     % LogbackVersion,
+
+  "org.specs2"      %% "specs2-core"         % Specs2Version % "test",
 )
+
+addCompilerPlugin("org.typelevel" %% "kind-projector"     % "0.10.3")
+addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.1")
 
 scalacOptions ++= Seq(
   "-unchecked",
   "-deprecation",
   "-explaintypes",
+  "-language:higherKinds",
+  "-language:postfixOps",
   "-feature",
   "-Xcheckinit",
   "-Xfatal-warnings",

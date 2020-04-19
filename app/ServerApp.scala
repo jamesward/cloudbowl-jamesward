@@ -1,14 +1,17 @@
-import play.api.Mode
-import play.api.mvc.Results
-import play.api.routing.Router
-import play.api.routing.sird._
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
-import play.core.server.{DefaultAkkaHttpServerComponents, ServerConfig}
+import cats.effect.{ExitCode, IO, IOApp}
+import cats.implicits._
+import io.circe._
+import io.circe.generic.auto._
+import org.http4s.{EntityEncoder, HttpRoutes}
+import org.http4s.circe._
+import org.http4s.dsl.impl.Root
+import org.http4s.dsl.io._
+import org.http4s.implicits._
+import org.http4s.server.blaze.BlazeServerBuilder
 
-import scala.util.{Random, Try}
+import scala.util.{Failure, Random, Success}
 
-object ServerApp {
+object ServerApp extends IOApp {
 
   // todo: better type representation of circularness
   sealed trait Direction {
@@ -45,39 +48,46 @@ object ServerApp {
     }
   }
 
-  sealed trait Turn
-  case object L extends Turn
-  case object R extends Turn
-
-  // todo: better way to validate?
-  implicit val directionReads: Reads[Direction] = __.read[String].flatMap { s =>
-    Direction(s).fold(Reads.failed[Direction]("Could not parse direction"))(Reads.pure(_))
+  implicit val directionDecoder: Decoder[Direction] = Decoder.decodeString.emapTry {
+    case "N" => Success(N)
+    case "E" => Success(E)
+    case "S" => Success(S)
+    case "W" => Success(W)
+    case  _  => Failure(new Exception("Could not parse direction"))
   }
 
+  sealed trait Move
+  case object T extends Move
+  case object F extends Move
+
+  sealed trait Turn
+  case object L extends Move with Turn
+  case object R extends Move with Turn
+
+  implicit val moveEntityEncoder: EntityEncoder[IO, Move] =
+    EntityEncoder.stringEncoder[IO].contramap[Move] {
+      case T => "T"
+      case F => "F"
+      case L => "L"
+      case R => "R"
+  }
+
+
   case class Self(href: String)
-  implicit val selfReads = Json.reads[Self]
-
   case class Links(self: Self)
-  implicit val linksReads = Json.reads[Links]
-
   case class PlayerState(x: Int, y: Int, direction: Direction, wasHit: Boolean, score: Int)
-  implicit val playerStateReads = Json.reads[PlayerState]
 
   case class Arena(width: Int, height: Int, state: Map[String, PlayerState])
-  // todo: only parse the seq once?
-  implicit val arenaReads = (
-    (__ \ "dims").read[Seq[Int]].collect(JsonValidationError("Could not get first element of dims")) {
-      case width :: _ => width
-    } ~
-    (__ \ "dims").read[Seq[Int]].collect(JsonValidationError("Could not get second element of dims")) {
-      case _ :: height :: _ => height
-    } ~
-    (__ \ "state").read[Map[String, PlayerState]]
-  )(Arena.apply _)
+  implicit val arenaDecoder: Decoder[Arena] = (c: HCursor) => {
+    for {
+      dims <- c.downField("dims").as[Seq[Int]]
+      state <- c.downField("state").as[Map[String, PlayerState]]
+    } yield Arena(dims(0), dims(1), state)
+  }
 
   case class ArenaUpdate(_links: Links, arena: Arena)
-  implicit val arenaUpdateReads = Json.reads[ArenaUpdate]
 
+  implicit val arenaUpdateDecoder = jsonOf[IO, ArenaUpdate]
 
   def isSomeoneInLineOfFire(me: PlayerState, all: Iterable[PlayerState]): Boolean = {
     val dist = 3
@@ -118,62 +128,68 @@ object ServerApp {
     }
   }
 
-  lazy val components = new DefaultAkkaHttpServerComponents {
-    private[this] lazy val port = sys.env.get("PORT").flatMap(s => Try(s.toInt).toOption).getOrElse(8080)
-    private[this] lazy val mode = if (configuration.get[String]("play.http.secret.key").contains("changeme")) Mode.Dev else Mode.Prod
+  def decide(arenaUpdate: ArenaUpdate): Move = {
+    val me = arenaUpdate.arena.state(arenaUpdate._links.self.href)
+    val all = arenaUpdate.arena.state.values
 
-    override lazy val serverConfig: ServerConfig = ServerConfig(port = Some(port), mode = mode)
-
-
-    override lazy val router: Router = Router.from {
-      case POST(p"/$_*") =>
-        Action(parse.json[ArenaUpdate]) { request =>
-          val me = request.body.arena.state(request.body._links.self.href)
-          val all = request.body.arena.state.values
-
-          // todo: better way to find the nearest route to a hit
-          val move = if (isSomeoneInLineOfFire(me, all)) {
-            "T"
-          }
-          else if (isSomeoneInLineOfFire(turn(me, L), all)) {
-            "L"
-          }
-          else if (isSomeoneInLineOfFire(turn(me, R), all)) {
-            "R"
-          }
-          // hittable player behind me
-          else if (isSomeoneInLineOfFire(turn(turn(me, R), R), all)) {
-            "R"
-          }
-          else if (isSomeoneInLineOfFire(forward(me), all)) {
-            "F"
-          }
-          else if (isSomeoneInLineOfFire(turn(forward(me), L), all)) {
-            "F"
-          }
-          else if (isSomeoneInLineOfFire(turn(forward(me), R), all)) {
-            "F"
-          }
-          else if (isSomeoneInLineOfFire(forward(turn(me, L)), all)) {
-            "L"
-          }
-          else if (isSomeoneInLineOfFire(forward(turn(me, R)), all)) {
-            "R"
-          }
-          // dunno
-          else {
-            Random.shuffle(Seq("F", "R", "L")).head
-          }
-
-          Results.Ok(move)
-        }
+    // todo: better way to find the nearest route to a hit
+    if (isSomeoneInLineOfFire(me, all)) {
+      T
+    }
+    else if (isSomeoneInLineOfFire(turn(me, L), all)) {
+      L
+    }
+    else if (isSomeoneInLineOfFire(turn(me, R), all)) {
+      R
+    }
+    // hittable player behind me
+    else if (isSomeoneInLineOfFire(turn(turn(me, R), R), all)) {
+      R
+    }
+    else if (isSomeoneInLineOfFire(forward(me), all)) {
+      F
+    }
+    else if (isSomeoneInLineOfFire(turn(forward(me), L), all)) {
+      F
+    }
+    else if (isSomeoneInLineOfFire(turn(forward(me), R), all)) {
+      F
+    }
+    else if (isSomeoneInLineOfFire(forward(turn(me, L)), all)) {
+      L
+    }
+    else if (isSomeoneInLineOfFire(forward(turn(me, R)), all)) {
+      R
+    }
+    // dunno
+    else {
+      Random.shuffle(Seq(F, R, L)).head
     }
   }
 
-  def main(args: Array[String]): Unit = {
-    // server is lazy so eval it to start it
-    components.server
+  val httpApp = HttpRoutes.of[IO] {
+    case req @ POST -> Root =>
+      for {
+        arenaUpdate <- req.as[ArenaUpdate]
+        resp <- Ok(decide(arenaUpdate))
+      } yield resp
+  }.orNotFound
+
+  //val finalHttpApp = Logger.httpApp(true, true)(httpApp)
+
+
+  def run(args: List[String]) = {
+    val port = sys.env.getOrElse("PORT", "8080").toInt
+
+    BlazeServerBuilder[IO]
+      .bindHttp(port, "0.0.0.0")
+      .withHttpApp(httpApp)
+      .serve
+      .compile
+      .drain
+      .as(ExitCode.Success)
   }
+
 
 }
 
