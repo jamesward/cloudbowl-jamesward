@@ -1,1 +1,2 @@
+POST   /           controllers.Main.index(ignored = "")
 POST   /*ignored   controllers.Main.index(ignored)
