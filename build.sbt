@@ -1,23 +1,23 @@
-enablePlugins(JavaAppPackaging)
+enablePlugins(PlayScala)
 
 name := "cloudbowl-jamesward"
-
-scalaSource in Compile := baseDirectory.value / "app"
-
-resourceDirectory in Compile := baseDirectory.value / "app"
-
-scalaSource in Test := baseDirectory.value / "test"
 
 scalaVersion := "2.13.1"
 
 resolvers += Resolver.mavenLocal
 
 libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.1",
+  guice,
   "org.slf4j" % "slf4j-simple" % "1.7.21",
 
   "org.scalatest" %% "scalatest" % "3.1.1" % "test"
 )
+
+publishArtifact in (Compile, packageDoc) := false
+
+publishArtifact in packageDoc := false
+
+sources in (Compile,doc) := Seq.empty
 
 scalacOptions ++= Seq(
   "-unchecked",
@@ -45,9 +45,7 @@ scalacOptions ++= Seq(
   "-Ywarn-numeric-widen",
   "-Ywarn-unused:implicits",
   "-Ywarn-unused:locals",
-  "-Ywarn-unused:params",
+  //"-Ywarn-unused:params",
   "-Ywarn-unused:patvars",
   "-Ywarn-unused:privates",
 )
-
-Global / cancelable := false
