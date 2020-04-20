@@ -184,6 +184,7 @@ object ServerApp extends IOApp {
     BlazeServerBuilder[IO]
       .bindHttp(port, "0.0.0.0")
       .withHttpApp(httpApp)
+      .withNio2(true)
       .serve
       .compile
       .drain
