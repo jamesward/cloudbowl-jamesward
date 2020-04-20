@@ -1,17 +1,9 @@
-import cats.effect.{ExitCode, IO, IOApp}
-import cats.implicits._
-import io.circe._
-import io.circe.generic.auto._
-import org.http4s.{EntityEncoder, HttpRoutes}
-import org.http4s.circe._
-import org.http4s.dsl.impl.Root
-import org.http4s.dsl.io._
-import org.http4s.implicits._
-import org.http4s.server.blaze.BlazeServerBuilder
+import cask.Request
 
-import scala.util.{Failure, Random, Success}
+import scala.util.Random
+import upickle.default._
 
-object ServerApp extends IOApp {
+object ServerApp extends cask.MainRoutes {
 
   // todo: better type representation of circularness
   sealed trait Direction {
@@ -48,15 +40,14 @@ object ServerApp extends IOApp {
     }
   }
 
-  implicit val directionDecoder: Decoder[Direction] = Decoder.decodeString.emapTry {
-    case "N" => Success(N)
-    case "E" => Success(E)
-    case "S" => Success(S)
-    case "W" => Success(W)
-    case  _  => Failure(new Exception("Could not parse direction"))
+  sealed trait Move {
+    override def toString: String = this match {
+      case T => "T"
+      case F => "F"
+      case L => "L"
+      case R => "R"
+    }
   }
-
-  sealed trait Move
   case object T extends Move
   case object F extends Move
 
@@ -64,30 +55,32 @@ object ServerApp extends IOApp {
   case object L extends Move with Turn
   case object R extends Move with Turn
 
-  implicit val moveEntityEncoder: EntityEncoder[IO, Move] =
-    EntityEncoder.stringEncoder[IO].contramap[Move] {
-      case T => "T"
-      case F => "F"
-      case L => "L"
-      case R => "R"
-  }
-
-
   case class Self(href: String)
   case class Links(self: Self)
   case class PlayerState(x: Int, y: Int, direction: Direction, wasHit: Boolean, score: Int)
 
   case class Arena(width: Int, height: Int, state: Map[String, PlayerState])
-  implicit val arenaDecoder: Decoder[Arena] = (c: HCursor) => {
-    for {
-      dims <- c.downField("dims").as[Seq[Int]]
-      state <- c.downField("state").as[Map[String, PlayerState]]
-    } yield Arena(dims(0), dims(1), state)
-  }
 
   case class ArenaUpdate(_links: Links, arena: Arena)
 
-  implicit val arenaUpdateDecoder = jsonOf[IO, ArenaUpdate]
+  implicit val selfReader: Reader[Self] = macroR
+  implicit val linksReader: Reader[Links] = macroR
+  implicit val directionReader: Reader[Direction] = reader[String].map {
+    case "N" => N
+    case "E" => E
+    case "S" => S
+    case "W" => W
+  }
+  implicit val playerStateReader: Reader[PlayerState] = macroR
+
+  implicit val arenaReader: Reader[Arena] = reader[ujson.Obj].map { json =>
+    val dims = read[Seq[Int]](json("dims"))
+    val state = read[Map[String, PlayerState]](json("state"))
+    Arena(dims(0), dims(1), state)
+  }
+
+  implicit val arenaUpdateReader: Reader[ArenaUpdate] = macroR
+
 
   def isSomeoneInLineOfFire(me: PlayerState, all: Iterable[PlayerState]): Boolean = {
     val dist = 3
@@ -167,30 +160,13 @@ object ServerApp extends IOApp {
     }
   }
 
-  val httpApp = HttpRoutes.of[IO] {
-    case req @ POST -> Root =>
-      for {
-        arenaUpdate <- req.as[ArenaUpdate]
-        resp <- Ok(decide(arenaUpdate))
-      } yield resp
-  }.orNotFound
-
-  //val finalHttpApp = Logger.httpApp(true, true)(httpApp)
-
-
-  def run(args: List[String]) = {
-    val port = sys.env.getOrElse("PORT", "8080").toInt
-
-    BlazeServerBuilder[IO]
-      .bindHttp(port, "0.0.0.0")
-      .withHttpApp(httpApp)
-      .withNio2(true)
-      .serve
-      .compile
-      .drain
-      .as(ExitCode.Success)
+  @cask.post("/")
+  def index(request: Request) = {
+    val arenaUpdate = read[ArenaUpdate](request.data)
+    decide(arenaUpdate).toString
   }
 
+  initialize()
 
 }
 

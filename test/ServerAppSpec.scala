@@ -1,6 +1,6 @@
 import ServerApp._
-import org.http4s.dsl.io._
 import org.specs2.mutable.Specification
+import upickle.default._
 
 class ServerAppSpec extends Specification {
 
@@ -28,7 +28,7 @@ class ServerAppSpec extends Specification {
         |}
         |""".stripMargin
 
-      Ok(json).flatMap(_.as[ArenaUpdate]).unsafeRunSync().arena.width must beEqualTo(4)
+      read[ArenaUpdate](json).arena.width must beEqualTo(4)
     }
   }
 
