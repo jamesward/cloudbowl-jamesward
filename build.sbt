@@ -1,4 +1,4 @@
-enablePlugins(JavaAppPackaging)
+enablePlugins(GraalVMNativeImagePlugin)
 
 name := "cloudbowl-jamesward"
 
@@ -23,13 +23,24 @@ libraryDependencies ++= Seq(
   "org.http4s"      %% "http4s-circe"        % Http4sVersion,
   "org.http4s"      %% "http4s-dsl"          % Http4sVersion,
   "io.circe"        %% "circe-generic"       % CirceVersion,
-  "ch.qos.logback"  %  "logback-classic"     % LogbackVersion,
+  //"ch.qos.logback"  %  "logback-classic"     % LogbackVersion,
 
   "org.specs2"      %% "specs2-core"         % Specs2Version % "test",
 )
 
 addCompilerPlugin("org.typelevel" %% "kind-projector"     % "0.10.3")
 addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.1")
+
+javacOptions ++= Seq("-source", "11", "-target", "11")
+
+scalacOptions += "-target:jvm-11"
+
+initialize := {
+  val _ = initialize.value
+  val javaVersion = sys.props("java.specification.version")
+  if (javaVersion != "11")
+    sys.error("Java 11 is required for this project. Found " + javaVersion + " instead")
+}
 
 scalacOptions ++= Seq(
   "-unchecked",
@@ -65,3 +76,26 @@ scalacOptions ++= Seq(
 )
 
 Global / cancelable := false
+
+publishArtifact in (Compile, packageDoc) := false
+
+publishArtifact in packageDoc := false
+
+sources in (Compile,doc) := Seq.empty
+
+// if this is specified, graalvm runs inside docker, otherwise it uses an PATH'd native-image
+//graalVMNativeImageGraalVersion := Some("20.0.0-java11")
+
+graalVMNativeImageOptions ++= Seq(
+  "--verbose",
+  "--no-server",
+  "--no-fallback",
+  "--static",
+  "--report-unsupported-elements-at-runtime",
+  "-H:+ReportExceptionStackTraces",
+  "-H:+ReportUnsupportedElementsAtRuntime",
+  "-H:+TraceClassInitialization",
+  "-H:+PrintClassInitialization",
+  "--initialize-at-build-time=scala.runtime.Statics$VM",
+  "--allow-incomplete-classpath",
+)
