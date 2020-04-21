@@ -13,7 +13,7 @@ scalaVersion := "2.13.1"
 resolvers += Resolver.mavenLocal
 
 libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.1",
+  "com.typesafe.play" %% "play-netty-server" % "2.8.1",
   "org.slf4j" % "slf4j-simple" % "1.7.21",
 
   "org.scalatest" %% "scalatest" % "3.1.1" % "test"

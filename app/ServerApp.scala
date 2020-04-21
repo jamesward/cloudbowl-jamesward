@@ -1,10 +1,10 @@
-import play.api.Mode
-import play.api.mvc.Results
+import play.api.{BuiltInComponents, Mode}
+import play.api.mvc.{EssentialFilter, Results}
 import play.api.routing.Router
 import play.api.routing.sird._
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
-import play.core.server.{DefaultAkkaHttpServerComponents, ServerConfig}
+import play.core.server.{NettyServerComponents, ServerConfig}
 
 import scala.util.{Random, Try}
 
@@ -118,12 +118,12 @@ object ServerApp {
     }
   }
 
-  lazy val components = new DefaultAkkaHttpServerComponents {
+  val components = new NettyServerComponents with BuiltInComponents {
+
     private[this] lazy val port = sys.env.get("PORT").flatMap(s => Try(s.toInt).toOption).getOrElse(8080)
     private[this] lazy val mode = if (configuration.get[String]("play.http.secret.key").contains("changeme")) Mode.Dev else Mode.Prod
 
     override lazy val serverConfig: ServerConfig = ServerConfig(port = Some(port), mode = mode)
-
 
     override lazy val router: Router = Router.from {
       case POST(p"/$_*") =>
@@ -168,11 +168,16 @@ object ServerApp {
           Results.Ok(move)
         }
     }
+
+    override def httpFilters: Seq[EssentialFilter] = Seq.empty
   }
 
   def main(args: Array[String]): Unit = {
-    // server is lazy so eval it to start it
-    components.server
+    val server = components.server
+
+    while (!Thread.currentThread.isInterrupted) {}
+
+    server.stop()
   }
 
 }
