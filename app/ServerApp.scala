@@ -1,10 +1,8 @@
-import play.api.{BuiltInComponents, Mode}
-import play.api.mvc.{EssentialFilter, Results}
-import play.api.routing.Router
+import play.api.Mode
 import play.api.routing.sird._
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
-import play.core.server.{NettyServerComponents, ServerConfig}
+import play.core.server.{NettyServer, ServerConfig}
 
 import scala.util.{Random, Try}
 
@@ -118,63 +116,64 @@ object ServerApp {
     }
   }
 
-  val components = new NettyServerComponents with BuiltInComponents {
+  def decide(arenaUpdate: ArenaUpdate): String = {
+    val me = arenaUpdate.arena.state(arenaUpdate._links.self.href)
+    val all = arenaUpdate.arena.state.values
 
-    private[this] lazy val port = sys.env.get("PORT").flatMap(s => Try(s.toInt).toOption).getOrElse(8080)
-    private[this] lazy val mode = if (configuration.get[String]("play.http.secret.key").contains("changeme")) Mode.Dev else Mode.Prod
+    // todo: better way to find the nearest route to a hit
+    if (isSomeoneInLineOfFire(me, all)) {
+      "T"
+    }
+    else if (isSomeoneInLineOfFire(turn(me, L), all)) {
+      "L"
+    }
+    else if (isSomeoneInLineOfFire(turn(me, R), all)) {
+      "R"
+    }
+    // hittable player behind me
+    else if (isSomeoneInLineOfFire(turn(turn(me, R), R), all)) {
+      "R"
+    }
+    else if (isSomeoneInLineOfFire(forward(me), all)) {
+      "F"
+    }
+    else if (isSomeoneInLineOfFire(turn(forward(me), L), all)) {
+      "F"
+    }
+    else if (isSomeoneInLineOfFire(turn(forward(me), R), all)) {
+      "F"
+    }
+    else if (isSomeoneInLineOfFire(forward(turn(me, L)), all)) {
+      "L"
+    }
+    else if (isSomeoneInLineOfFire(forward(turn(me, R)), all)) {
+      "R"
+    }
+    // dunno
+    else {
+      Random.shuffle(Seq("F", "R", "L")).head
+    }
+  }
 
-    override lazy val serverConfig: ServerConfig = ServerConfig(port = Some(port), mode = mode)
+  val config = ServerConfig(
+    port = Some(sys.env.getOrElse("PORT", "8080").toInt),
+    mode = if (sys.env.contains("APPLICATION_SECRET")) Mode.Prod else Mode.Dev,
+  )
 
-    override lazy val router: Router = Router.from {
+  val server = NettyServer.fromRouterWithComponents(config) { components =>
+    import play.api.mvc.Results._
+    import components.{ defaultActionBuilder => Action }
+    import components.playBodyParsers._
+
+    {
       case POST(p"/$_*") =>
-        Action(parse.json[ArenaUpdate]) { request =>
-          val me = request.body.arena.state(request.body._links.self.href)
-          val all = request.body.arena.state.values
-
-          // todo: better way to find the nearest route to a hit
-          val move = if (isSomeoneInLineOfFire(me, all)) {
-            "T"
-          }
-          else if (isSomeoneInLineOfFire(turn(me, L), all)) {
-            "L"
-          }
-          else if (isSomeoneInLineOfFire(turn(me, R), all)) {
-            "R"
-          }
-          // hittable player behind me
-          else if (isSomeoneInLineOfFire(turn(turn(me, R), R), all)) {
-            "R"
-          }
-          else if (isSomeoneInLineOfFire(forward(me), all)) {
-            "F"
-          }
-          else if (isSomeoneInLineOfFire(turn(forward(me), L), all)) {
-            "F"
-          }
-          else if (isSomeoneInLineOfFire(turn(forward(me), R), all)) {
-            "F"
-          }
-          else if (isSomeoneInLineOfFire(forward(turn(me, L)), all)) {
-            "L"
-          }
-          else if (isSomeoneInLineOfFire(forward(turn(me, R)), all)) {
-            "R"
-          }
-          // dunno
-          else {
-            Random.shuffle(Seq("F", "R", "L")).head
-          }
-
-          Results.Ok(move)
+        Action(json[ArenaUpdate]) { request =>
+          Ok(decide(request.body))
         }
     }
-
-    override def httpFilters: Seq[EssentialFilter] = Seq.empty
   }
 
   def main(args: Array[String]): Unit = {
-    val server = components.server
-
     while (!Thread.currentThread.isInterrupted) {}
 
     server.stop()
