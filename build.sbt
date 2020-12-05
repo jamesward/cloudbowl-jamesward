@@ -8,13 +8,13 @@ resourceDirectory in Compile := baseDirectory.value / "app"
 
 scalaSource in Test := baseDirectory.value / "test"
 
-scalaVersion := "2.13.1"
+scalaVersion := "2.13.4"
 
 resolvers += Resolver.mavenLocal
 
 libraryDependencies := Seq(
-  "com.typesafe.play" %% "play-akka-http-server" % "2.8.1",
-  "com.typesafe.play" %% "play-akka-http2-support" % "2.8.1",
+  "com.typesafe.play" %% "play-akka-http-server" % "2.8.5",
+  "com.typesafe.play" %% "play-akka-http2-support" % "2.8.5",
   "org.slf4j" % "slf4j-simple" % "1.7.21",
 
   "org.scalatest" %% "scalatest" % "3.1.1" % "test"
@@ -33,7 +33,6 @@ scalacOptions ++= Seq(
   "-Xlint:doc-detached",
   "-Xlint:inaccessible",
   "-Xlint:infer-any",
-  "-Xlint:nullary-override",
   "-Xlint:nullary-unit",
   "-Xlint:option-implicit",
   "-Xlint:package-object-classes",
